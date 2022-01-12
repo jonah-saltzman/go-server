@@ -3,19 +3,22 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"os"
-	""
 
 	"github.com/julienschmidt/httprouter"
+
+	. "github.com/jonah-saltzman/go-server/page"
 )
 
 func viewHandler(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
 	title := params.ByName("title")
-	page, _ := loadPage(title)
-	m := page.toMap()
+	page, err := LoadPage(title)
+	if err != nil {
+		responder(writer, createMessage("Error", "Page not found"), http.StatusNotFound)
+		return
+	}
+	m := page.ToMap()
 	j := createJson(m)
 	if j == nil {
 		fmt.Println("error")
@@ -34,26 +37,18 @@ func createJson(m map[string]string) ([]byte) {
 	return j
 }
 
-func newPageFromJson(p *page.Page, data io.ReadCloser) (*page.Page, error) {
-	err := json.NewDecoder(data).Decode(&p)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return p, nil
-}
-
 func createHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	var p page.Page
-	_, err := newPageFromJson(&p, r.Body)
+	var p Page
+	_, err := NewPageFromJson(&p, r.Body)
 	if err != nil {
 		responder(w, createMessage("Error", err.Error()), http.StatusBadRequest)
 		return
 	}
-	if p.save() != nil {
+	if p.Save() != nil {
 		responder(w, createMessage("Error", "Error saving new page"), http.StatusInternalServerError)
 		return
 	}
-	m := p.toMap()
+	m := p.ToMap()
 	responder(w, m, http.StatusCreated)
 }
 
@@ -73,15 +68,6 @@ func responder(w http.ResponseWriter, m map[string]string, s int) {
 	}
 	w.Write([]byte("Good job"))
 	return
-}
-
-func loadPage(title string) (*page.Page, error) {
-	filename := title + ".txt"
-	body, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-	return &page.Page{Title: title, Body: string(body)}, nil
 }
 
 func main() {
